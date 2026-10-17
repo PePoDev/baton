@@ -1,5 +1,7 @@
 # Baton
 
+**Play it: https://pepo.dev/baton/**
+
 A daily conducting game. One new score a day, three takes, and you set the tempo.
 
 Tap once per beat and the band plays exactly when you tap. The score asks for a tempo that rises and falls over 32 beats, drawn as a dashed line inside a shaded band. A beat counts as "on the score" when your tempo is inside the band; 75% or more passes the day and keeps your streak going.
@@ -24,6 +26,8 @@ npm test         # unit tests (Vitest)
 npm run build    # type-check, then build dist/index.html
 npm run check    # build, then play a whole day in headless Chromium
 ```
+
+Every push to `main` that passes CI is deployed to GitHub Pages by `.github/workflows/ci.yml`.
 
 The build is **one self-contained HTML file** (`dist/index.html`, about 27 KB), so it deploys anywhere that serves static files: GitHub Pages, a CDN, a claude.ai artifact, or just opening the file. The only runtime dependency is Google Fonts.
 
