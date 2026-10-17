@@ -1,6 +1,6 @@
 # Baton
 
-**Play it: https://pepo.dev/baton/**
+**Play it: https://baton.pepo.dev/**
 
 A daily conducting game. One new score a day, three takes, and you set the tempo.
 
