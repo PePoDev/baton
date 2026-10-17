@@ -1,4 +1,4 @@
 node_modules/
-tests/wrapped-daily.html
-tests/*.png
+dist/
+tests/e2e/*.png
 .DS_Store

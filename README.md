@@ -4,11 +4,9 @@ A daily conducting game. One new score a day, three takes, and you set the tempo
 
 Tap once per beat and the band plays exactly when you tap. The score asks for a tempo that rises and falls over 32 beats, drawn as a dashed line inside a shaded band. A beat counts as "on the score" when your tempo is inside the band; 75% or more passes the day and keeps your streak going.
 
-Everyone gets the same score on the same date. The tempo curve, the band style (pop, music box, blues shuffle, lullaby, chiptune, folk, tango, march, pizzicato, orchestra) and the tune itself are all generated from the date, so there is nothing to download and no song library to maintain.
+Everyone gets the same score on the same date. The tempo curve, the band style (pop, music box, blues shuffle, lullaby, chiptune, folk, tango, march, pizzicato, orchestra) and the tune itself are all generated from the date, so there is nothing to download and no song library to maintain. Sound is synthesized with the Web Audio API.
 
 ## Play
-
-Open `index.html` in a browser. It is a single self-contained file: no build step, no dependencies beyond Google Fonts. Sound is synthesized with the Web Audio API, so turn your volume on.
 
 - Tap the big pad, or press **Space**, once per beat.
 - Your best of three takes counts. A take starts counting on your second tap, and leaving in the middle uses it up.
@@ -17,27 +15,40 @@ Open `index.html` in a browser. It is a single self-contained file: no build ste
 
 The band is wider early in the week and narrower toward the weekend, and sudden tempo jumps only appear from Wednesday on.
 
-## Files
+## Develop
+
+```sh
+npm install
+npm run dev      # local server with hot reload
+npm test         # unit tests (Vitest)
+npm run build    # type-check, then build dist/index.html
+npm run check    # build, then play a whole day in headless Chromium
+```
+
+The build is **one self-contained HTML file** (`dist/index.html`, about 27 KB), so it deploys anywhere that serves static files: GitHub Pages, a CDN, a claude.ai artifact, or just opening the file. The only runtime dependency is Google Fonts.
+
+`npm run check` needs a Chromium that matches the installed Playwright (`npx playwright install chromium`). Set `PLAYWRIGHT_CHROMIUM=/path/to/chromium` to use one you already have.
+
+## Layout
 
 | Path | What it is |
 |---|---|
-| `index.html` | The daily game |
-| `demos/index.html` | Six playable sketches of rhythm-game ideas that Baton grew out of |
-| `tests/check-daily.js` | Headless Playwright check: validates two years of generated scores, then plays through a full day |
+| `index.html` | The page: markup and the font link; Vite's entry |
+| `src/generator.ts` | `makeDay(n)`: the tempo curve, band style and tune for day `n`. Pure, no DOM |
+| `src/audio.ts` | The synthesized band: instruments, drum patterns, `playBeat` and `playEnding` |
+| `src/state.ts` | The player's record: localStorage, plus the account mirror on claude.ai |
+| `src/game.ts` | The rules of a day: takes, scoring, streaks, what each tap does |
+| `src/ui.ts` | Rendering: the staff, the take board, the record, controls |
+| `src/main.ts` | Wires events, the clock and the account sync |
+| `src/style.css` | Styles, light and dark |
+| `public/demos/index.html` | Six playable sketches of rhythm-game ideas that Baton grew out of; served at `/demos/` |
+| `tests/unit/` | Vitest: the generator and the saved-state repair |
+| `tests/e2e/play-through.js` | Playwright: a whole day played against the built file |
 
-## Running the check
+## The one rule
 
-```sh
-npm install playwright
-node tests/check-daily.js
-```
-
-It sweeps days 1–730 for valid tempo curves and melodies, then opens the page in headless Chromium and plays a passing take, an abandoned take, a failing take and a practice take.
+`makeDay(n)` must keep returning the same score for the same `n`, forever. Players' histories, streaks and shared results all depend on it. `tests/unit/generator.test.ts` holds a SHA-256 fingerprint of days 1–730 and fails the moment any of them changes. If you change the generator on purpose, make the change apply only to day numbers nobody has played yet, and update the fingerprint deliberately.
 
 ## How a day is generated
 
-`makeDay(n)` in `index.html` seeds a small PRNG with the day number and draws, in order: the section lengths, the tempo curve (holds, ramps and, later in the week, jumps, all kept between 60 and 138 BPM), the band style, a key, a chord progression and two bars of melody. Day 1 is 10 October 2026.
-
-## Note on the claude.ai version
-
-The page was first published as a claude.ai artifact, where it also syncs the player's record to their account so it follows them across devices. That code is guarded and does nothing when the page is served anywhere else.
+`makeDay(n)` seeds a small PRNG (mulberry32) with the day number and draws, in order: the section lengths, the tempo curve (holds, ramps and, later in the week, jumps, all kept between 60 and 138 BPM), the band style, a key, a chord progression and two bars of melody. Day 1 is 10 October 2026.
