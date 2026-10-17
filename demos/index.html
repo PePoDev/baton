@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Off-Beat Arcade</title>
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a drum-machine faceplate. A row of six step keys picks the pattern; one stage below plays it. */
+:root{
+  --bg:#E3E2DA; --panel:#F1F0EA; --well:#D7D6CD; --ink:#1C1D1A; --muted:#5A5C54; --line:#B7B6AB;
+  --k1:#DB4A33; --k2:#EA7D2E; --k3:#EDBB33; --key-ink:#1C1D1A;
+  --accent:#DB4A33; --good:#2B7A4B; --bad:#B3261E;
+  --led-on:#FFF6D8; --led-off:rgba(0,0,0,.28); --press:rgba(0,0,0,.2);
+  --f-display:"Bricolage Grotesque","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#181917; --panel:#222320; --well:#30312D; --ink:#ECEBE3; --muted:#A3A49A; --line:#45463F;
+    --accent:#EE6A4C; --good:#6FCF97; --bad:#FF7A6E; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#181917; --panel:#222320; --well:#30312D; --ink:#ECEBE3; --muted:#A3A49A; --line:#45463F;
+  --accent:#EE6A4C; --good:#6FCF97; --bad:#FF7A6E; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5}
+.wrap{max-width:880px;margin-inline:auto;padding-inline:16px;padding-block:28px 64px;display:flex;flex-direction:column;gap:22px}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+button{font-family:inherit;color:inherit}
+
+.eyebrow{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0}
+h1{font-family:var(--f-display);font-weight:800;font-size:clamp(2rem,6vw,3.1rem);line-height:1;letter-spacing:-.02em;margin:6px 0 10px;text-wrap:balance}
+.lede{margin:0;max-width:60ch;color:var(--muted)}
+
+.keys{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.key{appearance:none;border:0;border-radius:6px;padding:10px 10px 14px;background:var(--kc);color:var(--key-ink);text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:12px;box-shadow:inset 0 -5px 0 var(--press);font-weight:600;font-size:.9rem;line-height:1.15;min-width:0}
+.key .top{display:flex;justify-content:space-between;align-items:center;font-family:var(--f-mono);font-weight:500;font-size:.72rem}
+.key .led{width:9px;height:9px;border-radius:50%;background:var(--led-off)}
+.key[aria-selected="true"]{transform:translateY(3px);box-shadow:inset 0 -2px 0 var(--press)}
+.key[aria-selected="true"] .led{background:var(--led-on);box-shadow:0 0 0 2px var(--press)}
+@media (max-width:640px){.keys{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:clamp(16px,3vw,28px)}
+.demo{display:flex;flex-direction:column;gap:18px;min-width:0}
+.demo h2{font-family:var(--f-display);font-weight:800;font-size:1.7rem;line-height:1.05;letter-spacing:-.01em;margin:2px 0 0}
+.idea{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0}
+.rule{margin:0;max-width:64ch}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{appearance:none;font-weight:600;font-size:.92rem;padding:9px 16px;border-radius:6px;border:1px solid var(--ink);background:var(--ink);color:var(--panel);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn:disabled{opacity:.45;cursor:default}
+.read{font-family:var(--f-mono);font-size:.84rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.read b{color:var(--ink);font-weight:500}
+.msg{font-family:var(--f-mono);font-size:.86rem;min-height:2.9em;padding:10px 12px;background:var(--well);border-radius:6px;margin:0}
+.pad{appearance:none;border:0;border-radius:10px;background:var(--accent);color:var(--key-ink);min-height:104px;width:100%;cursor:pointer;font-family:var(--f-display);font-weight:800;font-size:1.3rem;touch-action:manipulation;user-select:none;-webkit-user-select:none;box-shadow:inset 0 -7px 0 var(--press);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.pad small{font-family:var(--f-mono);font-weight:400;font-size:.74rem}
+.pad.hit{transform:translateY(4px);box-shadow:inset 0 -3px 0 var(--press)}
+.pad.off{background:var(--bad)}
+.lab{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+/* 1 compose */
+.board{display:grid;grid-template-columns:44px repeat(8,minmax(0,1fr));gap:6px;align-items:center}
+.tile{position:relative;height:60px;background:var(--well);border-radius:4px;overflow:hidden}
+.tile::after{content:"";position:absolute;left:0;right:0;bottom:12px;height:3px;background:var(--ink)}
+.t-W::before{content:"";position:absolute;left:28%;right:28%;bottom:15px;height:30px;background:var(--muted);border-radius:2px 2px 0 0}
+.t-W.done::before{height:5px;opacity:.5}
+.t-P::after{background:linear-gradient(90deg,var(--ink) 0 14%,transparent 14% 86%,var(--ink) 86%)}
+.t-P::before{content:"";position:absolute;left:14%;right:14%;bottom:0;height:13px;border-inline:3px solid var(--ink)}
+.t-B::before{content:"";position:absolute;left:0;right:0;top:15px;height:6px;background:var(--muted)}
+.t-Z::before{content:"zZ";position:absolute;top:8px;left:0;right:0;text-align:center;font-family:var(--f-mono);font-size:.82rem;color:var(--muted)}
+.tile.bust{outline:2px solid var(--bad);outline-offset:-2px}
+.runner{position:absolute;left:50%;bottom:15px;width:14px;height:28px;margin-left:-7px;background:var(--accent);border-radius:4px 4px 2px 2px}
+.runner.jump{transform:translateY(-18px)}
+.runner.duck{height:12px}
+.runner.fail{background:var(--bad);transform:rotate(78deg)}
+.cell{appearance:none;height:42px;padding:0;border-radius:4px;border:1px solid var(--line);background:var(--well);cursor:pointer;min-width:0}
+.cell[aria-pressed="true"].r0{background:var(--k1);border-color:var(--k1)}
+.cell[aria-pressed="true"].r1{background:var(--k2);border-color:var(--k2)}
+.cell[aria-pressed="true"].r2{background:var(--k3);border-color:var(--k3)}
+.cell.now{box-shadow:0 0 0 2px var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:0;padding:0;list-style:none;font-size:.88rem;color:var(--muted)}
+.legend b{color:var(--ink);font-weight:600}
+
+/* 2 conduct */
+.lvlwrap{display:flex;flex-direction:column;gap:8px}
+.lvls{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;max-width:520px}
+.lvl{appearance:none;height:40px;padding:0;border-radius:6px;border:1px solid var(--line);border-bottom-width:4px;background:var(--well);font-family:var(--f-mono);font-size:.9rem;cursor:pointer;min-width:0}
+.lvl.pass{border-bottom-color:var(--good)}
+.lvl[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.lvl[aria-pressed="true"].pass{border-bottom-color:var(--good)}
+@media (max-width:640px){.lvls{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.chart{width:100%;max-width:700px;height:auto;display:block}
+.chart .gl{stroke:var(--line);stroke-width:.6}
+.chart .tx{font-family:var(--f-mono);font-size:9px;fill:var(--muted)}
+.chart .band{fill:var(--well)}
+.chart .tl{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
+.chart .pl{fill:none;stroke:var(--ink);stroke-width:1.4}
+.chart .ok{fill:var(--good)}
+.chart .no{fill:var(--bad)}
+
+/* 3 silence */
+.line{position:relative;height:84px;margin-inline:14px}
+.line::before{content:"";position:absolute;left:0;right:0;top:27px;height:2px;background:var(--line)}
+.dot{position:absolute;top:18px;width:20px;height:20px;margin-left:-10px;border-radius:50%;border:2px solid var(--muted);background:var(--panel)}
+.dot.mute{border-style:dashed}
+.dot.heard.lit,.dot.mute.lit{background:var(--ink);border-color:var(--ink);border-style:solid}
+.dot.land{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 28%,transparent)}
+.dot.land.lit{background:var(--accent)}
+.tapmark{font-style:normal;position:absolute;top:4px;width:2px;height:48px;margin-left:-1px;background:var(--good)}
+.tapmark span{position:absolute;top:54px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--f-mono);font-size:.74rem;color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.chips li{font-family:var(--f-mono);font-size:.8rem;padding:4px 10px;border:1px solid var(--line);border-radius:99px;font-variant-numeric:tabular-nums}
+
+/* 4 stealth */
+.yard{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.field{flex:1 1 280px;max-width:400px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.side{flex:1 1 220px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.sq{aspect-ratio:1;border-radius:4px;background:var(--well);position:relative;display:grid;place-items:center;font-family:var(--f-mono);font-size:.6rem;color:var(--muted)}
+.sq.wall{background:var(--muted)}
+.sq.lk{background:color-mix(in srgb,var(--k1) 24%,var(--panel))}
+.sq.lh{background:color-mix(in srgb,var(--k3) 30%,var(--panel))}
+.field.gk .lk{background:color-mix(in srgb,var(--k1) 70%,var(--panel))}
+.field.gh .lh{background:color-mix(in srgb,var(--k3) 80%,var(--panel))}
+.sq.exit{border:2px dashed var(--ink);color:var(--ink);background:var(--panel)}
+.sq.g::after{content:"";position:absolute;inset:20%;border-radius:50%;border:2px solid var(--ink)}
+.sq.gk::after{background:var(--k1)}
+.sq.gh::after{background:var(--k3)}
+.sq.me::after{content:"";position:absolute;inset:28%;background:var(--ink);transform:rotate(45deg);border-radius:2px}
+.sq.me.trip::after{background:var(--bad)}
+.beats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.beats span{font-family:var(--f-mono);font-size:.72rem;line-height:1.25;padding:8px 6px;border-radius:4px;background:var(--well);text-align:center;border-bottom:4px solid var(--bc)}
+.beats b{display:block;font-size:1.1rem;font-weight:500}
+.beats .on{background:var(--bc);color:var(--key-ink)}
+.dpad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,56px);gap:6px}
+.dpad button{appearance:none;border:1px solid var(--line);background:var(--well);border-radius:6px;font-size:1.2rem;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.dpad .u{grid-column:2;grid-row:1}.dpad .l{grid-column:1;grid-row:2}.dpad .d{grid-column:2;grid-row:2}.dpad .r{grid-column:3;grid-row:2}
+
+/* 5 hands */
+.lanes{display:flex;flex-direction:column;gap:10px}
+.lane{background:var(--well);border-radius:6px;padding:8px 22px 20px}
+.rail{position:relative;height:40px;border-bottom:2px solid var(--line)}
+.mk{position:absolute;bottom:-10px;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:var(--panel);border:2px solid var(--ink)}
+.mk.hit{background:var(--good);border-color:var(--good)}
+.mk.miss{background:var(--bad);border-color:var(--bad)}
+.head{position:absolute;top:0;bottom:-12px;left:0;width:2px;margin-left:-1px;background:var(--accent)}
+.pads{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.pads .pad:first-child{background:var(--k2)}
+.pads .pad:last-child{background:var(--k3)}
+.pads .pad.off{background:var(--bad)}
+.check{display:flex;gap:8px;align-items:center;font-size:.92rem}
+
+/* 6 cards */
+.hp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.meter{height:10px;background:var(--well);border-radius:99px;overflow:hidden;margin-top:4px}
+.meter i{display:block;height:100%;background:var(--ink);border-radius:99px}
+.meter.foe i{background:var(--accent)}
+.brow{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
+.fc{height:36px;display:grid;place-items:center;background:var(--well);border-radius:4px;font-family:var(--f-mono);font-size:.9rem;color:var(--muted)}
+.fc.hits{color:var(--bad);border:1px solid var(--bad);background:var(--panel);font-weight:500}
+.slot{appearance:none;height:54px;border:1px dashed var(--line);background:transparent;border-radius:4px;color:var(--muted);font-family:var(--f-mono);font-size:.8rem;cursor:pointer;padding:0;min-width:0}
+.slot.ok{border:2px solid var(--accent);color:var(--ink)}
+.pc{appearance:none;height:54px;border:0;border-radius:4px;background:var(--kc);color:var(--kt,var(--key-ink));font-weight:600;font-size:.72rem;cursor:pointer;padding:0 2px;min-width:0;overflow:hidden}
+.c-jab{--kc:var(--k3)}.c-hook{--kc:var(--k2)}.c-heavy{--kc:var(--k1)}.c-parry{--kc:var(--ink);--kt:var(--panel)}
+.fc.now,.slot.now,.pc.now{outline:2px solid var(--ink);outline-offset:1px}
+.hand{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
+.card{appearance:none;text-align:left;padding:0;border-radius:6px;border:1px solid var(--line);background:var(--panel);cursor:pointer;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.card .nm{background:var(--kc);color:var(--kt,var(--key-ink));padding:6px 10px;font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.card .nm span{font-family:var(--f-mono);font-weight:400;font-size:.78rem}
+.card .tx{padding:8px 10px 10px;font-size:.82rem;line-height:1.35;color:var(--muted)}
+.card.sel{outline:3px solid var(--ink);outline-offset:1px}
+.empty{font-family:var(--f-mono);font-size:.84rem;color:var(--muted);margin:0}
+
+@media (prefers-reduced-motion:no-preference){
+  .key,.pad{transition:transform .06s}
+  .sq.me.trip{animation:shake .18s}
+  @keyframes shake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Six playable sketches</p>
+    <h1>Rhythm games that aren't about hitting falling notes</h1>
+    <p class="lede">Each key below is a rough prototype of one idea. Turn your sound on and pick one. Everything works with touch, and with a keyboard where noted.</p>
+  </header>
+
+  <nav class="keys" role="tablist" aria-label="Game ideas">
+    <button class="key" role="tab" data-id="compose" style="--kc:var(--k1)"><span class="top">01<i class="led"></i></span>Loop Lock</button>
+    <button class="key" role="tab" data-id="conduct" style="--kc:var(--k1)"><span class="top">02<i class="led"></i></span>Baton</button>
+    <button class="key" role="tab" data-id="silence" style="--kc:var(--k2)"><span class="top">03<i class="led"></i></span>Dead Air</button>
+    <button class="key" role="tab" data-id="stealth" style="--kc:var(--k2)"><span class="top">04<i class="led"></i></span>Kick Patrol</button>
+    <button class="key" role="tab" data-id="hands" style="--kc:var(--k3)"><span class="top">05<i class="led"></i></span>Three on Four</button>
+    <button class="key" role="tab" data-id="cards" style="--kc:var(--k3)"><span class="top">06<i class="led"></i></span>Bar Fight</button>
+  </nav>
+
+  <main class="stage">
+
+    <section class="demo" id="p-compose">
+      <div><p class="idea">Compose, don't follow</p><h2>Loop Lock</h2></div>
+      <p class="rule">The runner crosses one tile per step and reacts to whatever sound you put on that step. Build a loop that gets it to the end of the path and the door opens. Open ground is free, so add notes there to make the beat your own.</p>
+      <div class="board"></div>
+      <ul class="legend">
+        <li><b>Wall</b> needs a kick</li><li><b>Pit</b> needs a snare</li><li><b>Beam</b> needs a hat</li><li><b>zZ</b> needs silence</li>
+      </ul>
+      <p class="msg" role="status"></p>
+      <div class="ctl">
+        <button class="btn" data-act="play">Play loop</button>
+        <button class="btn ghost" data-act="clear">Clear grid</button>
+        <button class="btn ghost" data-act="next" hidden>Next level</button>
+        <span class="read" data-r="level"></span>
+      </div>
+    </section>
+
+    <section class="demo" id="p-conduct" hidden>
+      <div><p class="idea">You are the tempo</p><h2>Baton</h2></div>
+      <p class="rule">Each tap is one beat, and the band plays exactly when you tap. The dashed line is the tempo the score asks for. Keep your dots inside the shaded band. Land 75% of the beats to pass a level. There are ten scores, and you can try them in any order.</p>
+      <div class="lvlwrap">
+        <div class="lvls" role="group" aria-label="Levels"></div>
+        <span class="read" data-r="lvl"></span>
+      </div>
+      <svg class="chart" viewBox="0 0 400 152" role="img" aria-label="Tempo asked by the score against the tempo you conducted"></svg>
+      <button class="pad" type="button">Tap the beat<small>or press Space</small></button>
+      <p class="msg" role="status"></p>
+      <div class="ctl">
+        <button class="btn" data-act="next" hidden>Next level</button>
+        <button class="btn ghost" data-act="reset">Start over</button>
+        <span class="read" data-r="pos"></span>
+      </div>
+    </section>
+
+    <section class="demo" id="p-silence" hidden>
+      <div><p class="idea">Play the silence</p><h2>Dead Air</h2></div>
+      <p class="rule">You hear four beats, then the track cuts out and nothing on screen moves. Keep counting in your head and tap on the ringed beat, where the music comes back in. The silence gets longer each round.</p>
+      <div>
+        <p class="read" data-r="round"></p>
+        <div class="line"></div>
+      </div>
+      <button class="pad" type="button">Land it<small>or press Space</small></button>
+      <p class="msg" role="status"></p>
+      <div class="ctl">
+        <button class="btn" data-act="go">Play round 1</button>
+        <ul class="chips"></ul>
+      </div>
+    </section>
+
+    <section class="demo" id="p-stealth" hidden>
+      <div><p class="idea">Rhythm as a movement rule</p><h2>Kick Patrol</h2></div>
+      <p class="rule">You can only step on a beat, one step per beat. Red guards watch their whole lane on the kick (beats 1 and 3). Yellow guards watch on the snare (2 and 4). Step into a lane on the beat its guard is not looking, and step out on the very next beat. Reach the exit.</p>
+      <div class="yard">
+        <div class="field" aria-label="Guard yard"></div>
+        <div class="side">
+          <div class="beats">
+            <span style="--bc:var(--k1)"><b>1</b>red looks</span>
+            <span style="--bc:var(--k3)"><b>2</b>yellow looks</span>
+            <span style="--bc:var(--k1)"><b>3</b>red looks</span>
+            <span style="--bc:var(--k3)"><b>4</b>yellow looks</span>
+          </div>
+          <div class="dpad" aria-label="Move">
+            <button class="u" type="button" data-d="0,-1" aria-label="Up">&#9650;</button>
+            <button class="l" type="button" data-d="-1,0" aria-label="Left">&#9664;</button>
+            <button class="d" type="button" data-d="0,1" aria-label="Down">&#9660;</button>
+            <button class="r" type="button" data-d="1,0" aria-label="Right">&#9654;</button>
+          </div>
+          <span class="read" data-r="stat"></span>
+        </div>
+      </div>
+      <p class="msg" role="status"></p>
+      <div class="ctl">
+        <button class="btn" data-act="play">Start the loop</button>
+        <button class="btn ghost" data-act="reset">Reset</button>
+        <span class="read">Arrow keys or WASD also move.</span>
+      </div>
+    </section>
+
+    <section class="demo" id="p-hands" hidden>
+      <div><p class="idea">Two rhythms at once</p><h2>Three on Four</h2></div>
+      <p class="rule">Your left hand plays 3 evenly spaced hits per bar while your right hand plays 4. They only meet on the first beat. Hit every circle as the line crosses it. A bar counts as clean when you land all seven hits with no extras.</p>
+      <div class="lanes">
+        <div class="lane"><span class="lab">Left hand, 3 per bar</span><div class="rail" data-s="L"></div></div>
+        <div class="lane"><span class="lab">Right hand, 4 per bar</span><div class="rail" data-s="R"></div></div>
+      </div>
+      <div class="pads">
+        <button class="pad" type="button" data-s="L">Left<small>key F</small></button>
+        <button class="pad" type="button" data-s="R">Right<small>key J</small></button>
+      </div>
+      <p class="msg" role="status"></p>
+      <div class="ctl">
+        <button class="btn" data-act="play">Start</button>
+        <label class="check" for="guide"><input type="checkbox" id="guide" checked> Guide tones</label>
+        <span class="read" data-r="streak"></span>
+      </div>
+    </section>
+
+    <section class="demo" id="p-cards" hidden>
+      <div><p class="idea">Beat deckbuilder</p><h2>Bar Fight</h2></div>
+      <p class="rule">Each turn is one bar of 8 beats. Cards cost beats instead of mana, so a card is as wide as the time it takes. The Metronome shows which beats it will hit on. Arrange your bar around that, then play it.</p>
+      <div class="hp">
+        <div><span class="read" data-r="hp"></span><div class="meter"><i data-m="hp"></i></div></div>
+        <div><span class="read" data-r="foe"></span><div class="meter foe"><i data-m="foe"></i></div></div>
+      </div>
+      <div>
+        <p class="lab" style="margin:0 0 6px">The Metronome hits on</p>
+        <div class="brow" data-row="foe"></div>
+        <p class="lab" style="margin:12px 0 6px">Your bar</p>
+        <div class="brow" data-row="me"></div>
+      </div>
+      <p class="msg" role="status"></p>
+      <div>
+        <p class="lab" style="margin:0 0 6px">Your hand</p>
+        <div class="hand"></div>
+      </div>
+      <div class="ctl">
+        <button class="btn" data-act="play">Play the bar</button>
+        <button class="btn ghost" data-act="clear">Clear bar</button>
+        <button class="btn ghost" data-act="reset">New fight</button>
+        <span class="read" data-r="turn"></span>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+(()=>{
+'use strict';
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;};
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+
+/* ---------- audio ---------- */
+let AC=null,OUT=null,NB=null;
+function audio(){
+  if(!AC){
+    const C=window.AudioContext||window.webkitAudioContext;
+    AC=new C();
+    OUT=AC.createDynamicsCompressor();
+    const g=AC.createGain(); g.gain.value=.9;
+    OUT.connect(g); g.connect(AC.destination);
+    NB=AC.createBuffer(1,Math.floor(AC.sampleRate*.6),AC.sampleRate);
+    const d=NB.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  }
+  if(AC.state!=='running') AC.resume();
+  return AC;
+}
+const lag=()=>Math.min(.25,AC.outputLatency||AC.baseLatency||0);
+const heard=()=>AC.currentTime-lag();          // the moment in the music the listener is hearing now
+function shape(g,t,peak,dur){g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.001,peak),t+.004);g.gain.exponentialRampToValueAtTime(.0001,t+dur);}
+function tone(f,t,dur=.18,v=.25,type='triangle'){
+  t=Math.max(t,AC.currentTime);const o=AC.createOscillator(),g=AC.createGain();
+  o.type=type;o.frequency.setValueAtTime(f,t);shape(g,t,v,dur);o.connect(g);g.connect(OUT);o.start(t);o.stop(t+dur+.05);
+}
+function kick(t,v=1){
+  t=Math.max(t,AC.currentTime);const o=AC.createOscillator(),g=AC.createGain();
+  o.frequency.setValueAtTime(160,t);o.frequency.exponentialRampToValueAtTime(45,t+.11);
+  shape(g,t,.9*v,.24);o.connect(g);g.connect(OUT);o.start(t);o.stop(t+.3);
+}
+function nz(t,dur,freq,kind,v){
+  t=Math.max(t,AC.currentTime);const s=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();
+  s.buffer=NB;f.type=kind;f.frequency.value=freq;shape(g,t,v,dur);s.connect(f);f.connect(g);g.connect(OUT);s.start(t);s.stop(t+dur+.05);
+}
+const snare=(t,v=1)=>{nz(t,.16,1900,'bandpass',.55*v);tone(185,t,.09,.25*v);};
+const hat=(t,v=1)=>nz(t,.05,7500,'highpass',.22*v);
+const midi=n=>440*Math.pow(2,(n-69)/12);
+
+function raf(fn){
+  let id=0,on=false;
+  const step=()=>{if(!on)return;fn();if(on)id=requestAnimationFrame(step);};
+  return{get on(){return on;},start(){if(!on){on=true;id=requestAnimationFrame(step);}},stop(){on=false;cancelAnimationFrame(id);}};
+}
+function flash(node,cls,ms=110){node.classList.add(cls);setTimeout(()=>node.classList.remove(cls),ms);}
+
+const demos={};
+let active=null;
+
+/* ---------- 1. Loop Lock ---------- */
+demos.compose=(()=>{
+  const root=$('#p-compose'),board=$('.board',root),msg=$('.msg',root);
+  const playB=$('[data-act=play]',root),nextB=$('[data-act=next]',root),lvR=$('[data-r=level]',root);
+  const LEVELS=[
+    {path:'.W.P.W.P',hint:'Kick smashes walls. Snare jumps pits. One kick is already in place.',seed:{0:[1],2:[0,4]}},
+    {path:'W.BP.BWP',hint:'New: low beams. A hat makes the runner duck. A snare under a beam jumps straight into it.'},
+    {path:'WZPBZWBP',hint:'New: sleepers. Any sound on their step wakes them, so leave it empty.'}];
+  const ROWS=['Kick','Snare','Hat'],SND=[kick,snare,hat],STEP=.3;
+  let lv=0,grid=[],t0=0,next=0,q=[],alive=true,cleared=false;
+  const say=s=>msg.textContent=s;
+  const loop=raf(tick);
+  function load(i){
+    lv=i;grid=ROWS.map(()=>Array(8).fill(false));
+    const s=LEVELS[i].seed||{};for(const r in s)s[r].forEach(c=>grid[r][c]=true);
+    cleared=false;alive=true;build();say(LEVELS[i].hint);nextB.hidden=true;
+    lvR.textContent=`Level ${i+1} of ${LEVELS.length}`;
+  }
+  function build(){
+    board.innerHTML='';
+    board.append(el('span','lab','Path'));
+    [...LEVELS[lv].path].forEach(c=>board.append(el('div','tile t-'+(c==='.'?'o':c))));
+    ROWS.forEach((name,r)=>{
+      board.append(el('span','lab',name));
+      for(let c=0;c<8;c++){
+        const b=el('button','cell r'+r);b.type='button';
+        b.setAttribute('aria-label',`${name}, step ${c+1}`);b.setAttribute('aria-pressed',grid[r][c]);
+        b.onclick=()=>{grid[r][c]=!grid[r][c];b.setAttribute('aria-pressed',grid[r][c]);if(grid[r][c]&&!loop.on){audio();SND[r](AC.currentTime);}};
+        board.append(b);
+      }
+    });
+  }
+  function tick(){
+    const a=AC.currentTime;
+    while(t0+next*STEP<a+.12){
+      const t=t0+next*STEP,c=next%8;
+      if(t>a-.05)for(let r=0;r<3;r++)if(grid[r][c])SND[r](t);
+      q.push({n:next,t});next++;
+    }
+    const h=heard();
+    while(q.length&&q[0].t<=h)step(q.shift().n%8);
+  }
+  function step(c){
+    const tiles=$$('.tile',board);
+    if(c===0){alive=true;tiles.forEach(t=>t.classList.remove('done','bust'));}
+    $$('.cell',board).forEach((b,i)=>b.classList.toggle('now',i%8===c));
+    const old=$('.runner',board);if(old)old.remove();
+    if(!alive)return;
+    const k=grid[0][c],s=grid[1][c],h=grid[2][c],kind=LEVELS[lv].path[c];
+    let fail='';
+    if(kind==='W'&&!k)fail='ran into the wall. It needs a kick.';
+    else if(kind==='P'&&!s)fail='fell in the pit. It needs a snare.';
+    else if(kind==='B'&&s)fail='jumped into the beam. Take the snare off this step.';
+    else if(kind==='B'&&!h)fail='hit the beam. It needs a hat.';
+    else if(kind==='Z'&&(k||s||h))fail='woke the sleeper. Keep this step silent.';
+    tiles[c].append(el('div','runner'+(fail?' fail':s?' jump':h?' duck':'')));
+    if(fail){alive=false;tiles[c].classList.add('bust');say(`Step ${c+1}: the runner ${fail}`);return;}
+    if(kind!=='.')tiles[c].classList.add('done');
+    if(c===7){
+      if(!cleared){cleared=true;tone(midi(72),AC.currentTime,.3,.2);tone(midi(79),AC.currentTime+.12,.45,.2);}
+      const last=lv>=LEVELS.length-1;
+      say(last?'All three doors are open. Keep the loop running and add your own notes.':'Door open. Your loop is the key.');
+      nextB.hidden=last;
+    }
+  }
+  function start(){audio();t0=AC.currentTime+.12;next=0;q=[];loop.start();playB.textContent='Stop';}
+  function stop(){loop.stop();playB.textContent='Play loop';$$('.cell',board).forEach(b=>b.classList.remove('now'));}
+  playB.onclick=()=>{loop.on?stop():start();playB.blur();};
+  $('[data-act=clear]',root).onclick=()=>{grid.forEach(r=>r.fill(false));$$('.cell',board).forEach(b=>b.setAttribute('aria-pressed','false'));};
+  nextB.onclick=()=>load(lv+1);
+  load(0);
+  return{stop};
+})();
+
+/* ---------- 2. Baton ---------- */
+demos.conduct=(()=>{
+  const root=$('#p-conduct'),svg=$('svg',root),pad=$('.pad',root),msg=$('.msg',root),posR=$('[data-r=pos]',root);
+  const lvR=$('[data-r=lvl]',root),lvBox=$('.lvls',root),nextB=$('[data-act=next]',root);
+  /* One original tune per level.
+     key: tonic (MIDI). ch: one chord per bar as [semitones above tonic, 1 major / 0 minor].
+     mel: bar patterns of chord-tone indexes (-1 = rest), `sub` slots per beat. */
+  const SONGS={
+    pop:{style:'sunny pop',key:60,ch:[[0,1],[9,0],[5,1],[7,1]],mel:[[0,1,2,1,3,2,1,2]],
+      lead:{type:'triangle',v:.2,len:.9},bass:{pat:'root',type:'sine',v:.3},drum:'pop'},
+    box:{style:'music box',key:62,ch:[[0,1],[7,1],[9,0],[5,1]],mel:[[2,-1,3,2,1,-1,2,-1],[3,2,1,0,1,-1,2,-1]],
+      lead:{type:'sine',v:.2,len:2.6,oct:12,bell:true},bass:{pat:'root',type:'triangle',v:.14},drum:'tick'},
+    blues:{style:'blues shuffle',key:64,swing:.66,ch:[[0,0],[0,0],[5,0],[0,0],[7,1],[5,0],[0,0],[7,1]],mel:[[0,-1,1,2,-1,2,1,-1],[3,-1,2,1,0,-1,-1,1]],
+      lead:{type:'sawtooth',v:.11,len:.7},bass:{pat:'walk',type:'triangle',v:.3},drum:'shuffle'},
+    lull:{style:'lullaby',key:65,ch:[[0,1],[9,0],[5,1],[7,1]],mel:[[3,-1,2,-1,1,-1,2,-1],[2,-1,1,-1,0,-1,-1,-1]],
+      lead:{type:'sine',v:.24,len:1.8,oct:12},bass:{pat:'root',type:'sine',v:.22},pad:{type:'sine',v:.07},drum:'none'},
+    chip:{style:'chiptune',key:57,sub:4,ch:[[0,0],[8,1],[3,1],[10,1]],mel:[[0,2,3,2,1,2,4,2,0,2,3,2,5,4,3,2]],
+      lead:{type:'square',v:.08,len:.8,oct:12},bass:{pat:'oct',type:'square',v:.11},drum:'chip'},
+    folk:{style:'sea folk tune',key:62,swing:.6,ch:[[0,0],[10,1],[0,0],[7,0]],mel:[[0,2,3,2,4,3,2,1],[3,2,1,2,0,-1,1,2]],
+      lead:{type:'triangle',v:.2,len:.9,oct:12},bass:{pat:'drone',type:'sine',v:.18},drum:'folk'},
+    tango:{style:'tango',key:55,ch:[[0,0],[5,0],[7,1],[0,0]],mel:[[0,-1,-1,1,2,-1,3,-1],[4,-1,3,2,1,-1,-1,-1]],
+      lead:{type:'sawtooth',v:.11,len:.5,oct:12},bass:{pat:'hab',type:'triangle',v:.28},drum:'tango'},
+    march:{style:'climbing march',key:55,tr:j=>2*Math.min(4,Math.floor(j/6)),ch:[[0,1],[5,1],[7,1],[0,1]],mel:[[0,0,1,2,3,-1,2,-1],[3,2,1,2,0,-1,-1,-1]],
+      lead:{type:'sawtooth',v:.12,len:.8,oct:12},bass:{pat:'alt',type:'triangle',v:.28},drum:'march'},
+    pizz:{style:'pizzicato strings',key:64,ch:[[0,0],[0,0],[8,1],[10,1]],mel:[[0,-1,2,-1,3,-1,2,1],[-1,1,-1,2,-1,3,2,-1]],
+      lead:{type:'triangle',v:.24,len:.35,oct:12},bass:{pat:'root',type:'sine',v:.2,short:true},drum:'pizz'},
+    epic:{style:'big orchestra',key:60,ch:[[0,0],[8,1],[3,1],[10,1],[0,0],[8,1],[5,0],[7,1]],mel:[[0,-1,2,3,4,-1,3,2],[3,-1,2,1,2,-1,-1,-1]],
+      lead:{type:'sawtooth',v:.12,len:.9,oct:12},bass:{pat:'oct',type:'sawtooth',v:.14},pad:{type:'sawtooth',v:.035},drum:'epic'}};
+  const DRUMS={
+    pop:(b,t,e,o)=>{(b%2?snare:kick)(t,.7);hat(o,.6);},
+    tick:(b,t,e,o)=>{nz(t,.03,2600,'bandpass',.5);nz(o,.02,3400,'bandpass',.25);},
+    shuffle:(b,t,e,o)=>{(b%2?snare:kick)(t,.6);hat(t,.5);hat(o,.4);},
+    none:(b,t)=>{if(b===0)hat(t,.3);},
+    chip:(b,t,e,o)=>{kick(t,.6);nz(o,.03,5000,'highpass',.2);if(b%2)nz(t,.06,3000,'highpass',.25);},
+    folk:(b,t,e,o)=>{if(b%2===0)kick(t,.8);hat(t,.35);hat(o,.5);},
+    tango:(b,t,e,o)=>{if(b===0)kick(t,.7);nz(t,.04,2200,'bandpass',.3);if(b===3)snare(o,.5);},
+    march:(b,t,e,o)=>{if(b%2===0)kick(t,.8);snare(t,.45);snare(o,.2);if(b===3)snare(t+e*.75,.25);},
+    pizz:(b,t,e,o)=>{hat(o,.35);},
+    epic:(b,t,e,o)=>{kick(t,b===0?1.2:.7);tone(55,t,.35,b===0?.3:.12,'sine');if(b%2)snare(t,.6);if(b===0)nz(t,.5,5000,'highpass',.1);hat(o,.4);}};
+  /* segs: [beats, from BPM, to BPM]. tol: how far from the score a beat may be. */
+  const LEVELS=[
+    {name:'First Rehearsal',song:'pop',tol:.10,segs:[[8,84,84],[8,84,126],[8,126,126],[8,126,72]],tip:'Hold 84, speed up to 126, hold, then slow down to 72.'},
+    {name:'Metronome',song:'box',tol:.07,segs:[[24,100,100]],tip:'One tempo and no changes. The band is narrower, so every beat has to be even.'},
+    {name:'Slow Burn',song:'blues',tol:.10,segs:[[4,72,72],[24,72,132],[4,132,132]],tip:'One long, gradual speed-up. Add a little on every beat and never jump.'},
+    {name:'Wind Down',song:'lull',tol:.10,segs:[[4,132,132],[24,132,66],[4,66,66]],tip:'The reverse: let the air out slowly. Slowing down evenly is harder than speeding up.'},
+    {name:'Gear Change',song:'chip',tol:.10,segs:[[8,80,80],[8,120,120],[8,80,80],[8,120,120]],tip:'No ramps. The tempo jumps between 80 and 120, and you have one beat to land on the new speed.'},
+    {name:'Tide',song:'folk',tol:.10,segs:[[4,90,90],[6,90,120],[6,120,90],[6,90,120],[6,120,90],[4,90,90]],tip:'The tempo swells and falls like waves. Start turning before you reach the top.'},
+    {name:'Held Breath',song:'tango',tol:.10,segs:[[8,104,104],[4,104,60],[2,60,60],[8,104,104],[4,104,60],[2,60,60],[4,104,104]],tip:'Steady, then a big slow-down into a pause, then straight back to tempo.'},
+    {name:'Staircase',song:'march',tol:.08,segs:[[6,70,70],[6,85,85],[6,100,100],[6,115,115],[6,130,130]],tip:'Five steps up, 15 BPM each, and the tune climbs a key with every step.'},
+    {name:'Tightrope',song:'pizz',tol:.06,segs:[[8,96,96],[8,96,116],[8,116,116],[8,116,88]],tip:'Gentle changes, but the band is much narrower than in level 1.'},
+    {name:'Finale',song:'epic',tol:.08,segs:[[8,88,88],[8,88,136],[4,136,136],[4,72,72],[6,72,110],[6,110,80],[4,120,120],[8,120,60]],tip:'Everything at once: ramps, jumps and a long final slow-down over 48 beats.'}];
+  const PASS=.75;
+  let best=LEVELS.map(()=>0);
+  try{const s=JSON.parse(localStorage.getItem('baton-best')||'[]');best=best.map((b,i)=>typeof s[i]==='number'?clamp(s[i],0,1):0);}catch(e){}
+  let lv=0,L=LEVELS[0],N=32,T=[],k=0,last=0,good=0,done=false,pts=[];
+  const f=v=>v.toFixed(1);
+  const X=i=>40+(i-1)/(N-1)*350,Y=b=>125-(clamp(b,40,170)-40)*105/130;
+  const tgt=i=>T[clamp(i,1,N)];
+  const say=s=>msg.textContent=s;
+  const chordTones=q=>q?[0,4,7,12,16,19]:[0,3,7,12,15,19];
+  /* play beat j of the level's tune, starting at time t, expecting the beat to last `est` seconds */
+  function band(j,t,est){
+    const S=SONGS[L.song],tr=S.tr?S.tr(j):0,bar=Math.floor(j/4),b=j%4;
+    const [off,q]=S.ch[bar%S.ch.length],ct=chordTones(q);
+    const cr=S.key+tr+(off>=9?off-12:off),br=S.key+tr-24+(off>=5?off-12:off);
+    const sub=S.sub||2,o=t+est*(S.swing||.5),pat=S.mel[bar%S.mel.length],ld=S.lead,slot=est/sub;
+    for(let s=0;s<sub;s++){
+      const i=pat[b*sub+s];if(i<0)continue;
+      const when=s===0?t:sub===2?o:t+est*s/sub,fr=midi(cr+ct[i]+(ld.oct||0));
+      tone(fr,when,slot*ld.len,ld.v,ld.type);
+      if(ld.bell)tone(fr*2,when,slot*ld.len*.6,ld.v*.35,'sine');
+    }
+    const B=S.bass,bt=(n,when,len)=>tone(midi(br+n),when,len,B.v,B.type);
+    if(B.pat==='root')bt(0,t,est*(B.short?.3:.9));
+    else if(B.pat==='oct'){bt(0,t,est*.45);bt(12,t+est/2,est*.4);}
+    else if(B.pat==='walk')bt([0,ct[1],7,q?9:10][b],t,est*.8);
+    else if(B.pat==='alt')bt(b%2?7:0,t,est*.6);
+    else if(B.pat==='hab'){if(b%2===0){bt(0,t,est*.6);bt(7,t+est*.75,est*.25);}else{bt(12,t,est*.4);bt(7,t+est*.5,est*.4);}}
+    else if(B.pat==='drone'&&b%2===0){bt(0,t,est*1.9);bt(7,t,est*1.9);}
+    if(S.pad&&b%2===0)[0,ct[1],7].forEach(n=>tone(midi(cr+n),t,est*1.9,S.pad.v,S.pad.type));
+    DRUMS[S.drum](b,t,est,o);
+  }
+  function ending(j,t){
+    const S=SONGS[L.song],tr=S.tr?S.tr(j):0,third=chordTones(S.ch[0][1])[1];
+    [-12,0,third,7,12].forEach(n=>tone(midi(S.key+tr+n),t,1.6,.15,S.lead.type==='square'?'square':'triangle'));
+    kick(t);nz(t,.6,6000,'highpass',.12);
+  }
+  function plan(){T=[0];L.segs.forEach(([n,a,b])=>{for(let i=1;i<=n;i++)T.push(a+i/n*(b-a));});N=T.length-1;}
+  function base(){
+    /* a sudden change is drawn as a vertical step, not a slope */
+    const path=m=>{const a=[];for(let i=1;i<=N;i++){if(i>1&&Math.abs(T[i]-T[i-1])>12){const xm=f((X(i)+X(i-1))/2);a.push(xm+','+f(Y(T[i-1]*m)),xm+','+f(Y(T[i]*m)));}a.push(f(X(i))+','+f(Y(T[i]*m)));}return a;};
+    let g=`<polygon class="band" points="${path(1+L.tol).concat(path(1-L.tol).reverse()).join(' ')}"/>`;
+    [60,90,120,150].forEach(b=>{g+=`<line class="gl" x1="40" x2="390" y1="${f(Y(b))}" y2="${f(Y(b))}"/><text class="tx" x="34" y="${f(Y(b)+3)}" text-anchor="end">${b}</text>`;});
+    g+=`<polyline class="tl" points="${path(1).join(' ')}"/>`;
+    let o=0;
+    L.segs.forEach(([n,a,b])=>{
+      const short=n/(N-1)*350<48;
+      const s=a===b?(short?String(a):'hold '+a):b>a?(short?'up':'speed up'):(short?'down':'slow down');
+      g+=`<text class="tx" x="${f(X(o+(n+1)/2))}" y="146" text-anchor="middle">${s}</text>`;o+=n;
+    });
+    svg.innerHTML=g+'<g class="trace"></g>';
+  }
+  function trace(){
+    let g=`<polyline class="pl" points="${pts.map(p=>f(X(p.k))+','+f(Y(p.bpm))).join(' ')}"/>`;
+    pts.forEach(p=>{g+=`<circle class="${p.ok?'ok':'no'}" cx="${f(X(p.k))}" cy="${f(Y(p.bpm))}" r="3.2"/>`;});
+    $('.trace',svg).innerHTML=g;
+  }
+  function status(){
+    posR.innerHTML=done?`Finished · <b>${good} of ${N}</b> beats on the score`:`Beat <b>${k}</b> of ${N} · score asks for <b>${Math.round(tgt(Math.max(1,k)))}</b> BPM next`;
+  }
+  function marks(){
+    [...lvBox.children].forEach((b,i)=>{
+      b.setAttribute('aria-pressed',String(i===lv));b.classList.toggle('pass',best[i]>=PASS);
+      b.setAttribute('aria-label',`Level ${i+1}: ${LEVELS[i].name}`+(best[i]>=PASS?', passed':''));
+    });
+    lvR.innerHTML=`Level <b>${lv+1}</b> of ${LEVELS.length} · <b>${L.name}</b> · the band plays <b>${SONGS[L.song].style}</b> · ${N} beats · within ±${Math.round(L.tol*100)}% · best <b>${Math.round(best[lv]*100)}%</b>`;
+  }
+  function reset(){k=0;last=0;good=0;done=false;pts=[];trace();status();marks();nextB.hidden=true;say(L.tip+' Give the first beat when you are ready.');}
+  function load(i){lv=i;L=LEVELS[i];plan();base();reset();}
+  function tap(){
+    if(done)return;
+    audio();flash(pad,'hit');
+    const now=performance.now()/1000,t=AC.currentTime+.01,j=k;
+    let est=60/tgt(j+1);
+    if(j>0){
+      const iv=now-last,bpm=60/iv,want=tgt(j),ok=Math.abs(bpm-want)/want<=L.tol;
+      if(ok)good++;pts.push({k:j,bpm,ok});est=clamp(iv,.25,1.2);trace();
+      const b=Math.round(bpm),a=Math.round(want);
+      say(ok?`With the score: ${b} BPM, asked for ${a}.`:bpm>want?`Rushing: ${b} BPM, the score asks for ${a}.`:`Dragging: ${b} BPM, the score asks for ${a}.`);
+    }else say(`Now set the tempo. The score asks for ${Math.round(tgt(1))} BPM.`);
+    last=now;
+    if(j===N){
+      ending(j,t);
+      done=true;
+      const frac=good/N,pct=Math.round(frac*100),passed=frac>=PASS,more=lv<LEVELS.length-1;
+      if(frac>best[lv]){best[lv]=frac;try{localStorage.setItem('baton-best',JSON.stringify(best));}catch(e){}}
+      status();marks();nextB.hidden=!(passed&&more);
+      const miss=pts.filter(p=>!p.ok),fast=miss.filter(p=>p.bpm>tgt(p.k)).length;
+      say(`Final chord. ${good} of ${N} beats on the score (${pct}%). `+(passed
+        ?(more?'Passed. The next score is ready.':'Passed. That was the last score, and the band would follow you anywhere.')
+        :`You need ${Math.round(PASS*100)}% to pass. `+(fast>miss.length/2?'Most of your misses were rushing.':'Most of your misses were dragging.')+' Start over to try again.'));
+      return;
+    }
+    band(j,t,est);
+    k++;status();
+  }
+  LEVELS.forEach((_,i)=>{const b=el('button','lvl',String(i+1));b.type='button';b.onclick=()=>{load(i);b.blur();};lvBox.append(b);});
+  pad.addEventListener('pointerdown',e=>{e.preventDefault();tap();});
+  $('[data-act=reset]',root).onclick=e=>{reset();e.currentTarget.blur();};
+  nextB.onclick=()=>{load(lv+1);nextB.blur();};
+  load(0);
+  return{stop(){},key(e){if(e.code==='Space'){tap();return true;}}};
+})();
+
+/* ---------- 3. Dead Air ---------- */
+demos.silence=(()=>{
+  const root=$('#p-silence'),line=$('.line',root),pad=$('.pad',root),msg=$('.msg',root);
+  const goB=$('[data-act=go]',root),roundR=$('[data-r=round]',root),chips=$('.chips',root);
+  const R=[{bpm:100,a:4,s:2},{bpm:100,a:4,s:4},{bpm:126,a:4,s:4},{bpm:84,a:4,s:6},{bpm:112,a:4,s:8}];
+  let r=0,pending=null,state='idle',t0=0,beat=0,target=0,ev=[],res=[];
+  const say=s=>msg.textContent=s;
+  const loop=raf(tick);
+  function layout(){
+    const {bpm,a,s}=R[r],n=a+s+1;line.innerHTML='';
+    for(let i=0;i<n;i++){const d=el('span','dot '+(i<a?'heard':i<a+s?'mute':'land'));d.style.left=(i/(n-1)*100)+'%';line.append(d);}
+    roundR.innerHTML=`Round <b>${r+1}</b> of ${R.length} · <b>${bpm}</b> BPM · ${a} beats heard, <b>${s}</b> silent`;
+  }
+  function play(){
+    audio();
+    if(pending!==null){r=pending;pending=null;if(r===0){res=[];chips.innerHTML='';}}
+    const {bpm,a,s}=R[r];beat=60/bpm;t0=AC.currentTime+.3;target=t0+(a+s)*beat;state='run';ev=[];layout();
+    for(let i=0;i<a;i++){const t=t0+i*beat;ev.push({t,f:()=>{kick(t);tone(midi(i%2?43:36),t,beat*.7,.22,'sine');}});ev.push({t:t+beat/2,f:()=>hat(t+beat/2,.8)});}
+    for(let j=0;j<4;j++){
+      const t=target+j*beat;
+      ev.push({t,f:()=>{kick(t);if(j%2)snare(t,.6);tone(midi(36),t,beat*.7,.22,'sine');if(j===0){[60,64,67].forEach(n=>tone(midi(n),t,beat*1.5,.14));nz(t,.5,6000,'highpass',.12);}}});
+      ev.push({t:t+beat/2,f:()=>hat(t+beat/2,.8)});
+    }
+    ev.sort((x,y)=>x.t-y.t);
+    goB.disabled=true;say('Listen. Four beats, then count the silence yourself.');loop.start();
+  }
+  function tick(){
+    const a=AC.currentTime,h=heard(),A=R[r].a;
+    while(ev.length&&ev[0].t<a+.12)ev.shift().f();
+    $$('.dot',line).forEach((d,i)=>{if(i<A&&h>=t0+i*beat)d.classList.add('lit');});
+    if(state==='run'&&h>target+1.3*beat)finish(null);
+    if(state==='shown'&&!ev.length&&h>target+4*beat)loop.stop();
+  }
+  function finish(tt){
+    state='shown';
+    const {a,s}=R[r],n=a+s+1;
+    $$('.dot',line).forEach(d=>d.classList.add('lit'));
+    let label;
+    if(tt===null){say('No tap. The beat came back without you.');label='missed';}
+    else{
+      const ms=Math.round((tt-target)*1000),abs=Math.abs(ms);
+      const m=el('i','tapmark');m.style.left=clamp((tt-t0)/beat/(n-1),0,1.03)*100+'%';
+      m.append(el('span','',(ms>0?'+':'')+ms+' ms'));line.append(m);
+      label=(ms>0?'+':'')+ms+' ms';
+      const v=abs<=40?'Dead on.':abs<=90?'Close.':abs<=170?'Drifting.':'Lost the count.';
+      say(`${v} You tapped ${abs} ms ${ms<0?'early':'late'} after ${s} silent beats.`);
+    }
+    res.push(label);chips.append(el('li','',`R${r+1}  ${label}`));
+    pending=(r+1)%R.length;goB.disabled=false;
+    goB.textContent=pending===0?'Play again from round 1':`Play round ${pending+1}`;
+  }
+  function tap(){
+    flash(pad,'hit');
+    if(state!=='run')return;
+    const h=heard();
+    if(h<t0+(R[r].a-.5)*beat){say('Too early. Wait for the silence, then land on the ringed beat.');return;}
+    snare(AC.currentTime,.8);finish(h);
+  }
+  pad.addEventListener('pointerdown',e=>{e.preventDefault();tap();});
+  goB.onclick=()=>{play();goB.blur();};
+  layout();
+  say('Press play. Tap once, on the ringed beat.');
+  return{
+    stop(){loop.stop();ev=[];if(state==='run'){state='idle';goB.disabled=false;say('Stopped. Press play to try this round again.');}},
+    key(e){if(e.code==='Space'){tap();return true;}}
+  };
+})();
+
+/* ---------- 4. Kick Patrol ---------- */
+demos.stealth=(()=>{
+  const root=$('#p-stealth'),field=$('.field',root),msg=$('.msg',root),playB=$('[data-act=play]',root);
+  const statR=$('[data-r=stat]',root),beatEls=$$('.beats span',root);
+  const W=7,H=8,BEAT=60/92,WIN=.17;
+  const MAP=['......E','hhhhhhh','kkkkkkk','....###','hhhhhhh','..###..','kkkkkkk','...S...'];
+  const START={x:3,y:7};
+  let p,guards,t0=0,n=0,q=[],lastMove=-1,caught=0,beats=0,won=false;
+  const cells=[];
+  for(let i=0;i<W*H;i++){const c=el('div','sq');cells.push(c);field.append(c);}
+  const say=s=>msg.textContent=s;
+  const loop=raf(tick);
+  function init(){
+    p={...START};caught=0;beats=0;won=false;lastMove=-1;
+    guards=[{x:5,y:6,d:-1,t:'k'},{x:3,y:4,d:1,t:'h'},{x:1,y:2,d:1,t:'k'},{x:5,y:1,d:-1,t:'h'}];
+    draw();
+  }
+  function draw(trip){
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const ch=MAP[y][x],g=guards.find(o=>o.x===x&&o.y===y);
+      let c='sq'+(ch==='#'?' wall':ch==='k'?' lk':ch==='h'?' lh':ch==='E'?' exit':'');
+      if(g)c+=' g g'+g.t;
+      if(p.x===x&&p.y===y)c+=' me'+(trip?' trip':'');
+      const node=cells[y*W+x];node.className=c;node.textContent=ch==='E'&&!(p.x===x&&p.y===y)?'EXIT':'';
+    }
+    statR.innerHTML=`Beats used <b>${beats}</b> · caught <b>${caught}</b>`;
+  }
+  function tick(){
+    const a=AC.currentTime;
+    while(t0+n*BEAT<a+.12){
+      const t=t0+n*BEAT;
+      if(t>a-.05){if(n%2===0)kick(t);else snare(t,.6);hat(t+BEAT/2,.5);tone(midi([36,36,39,34][Math.floor(n/4)%4]),t,BEAT*.5,.14,'sine');}
+      q.push({n,t,st:0});n++;
+    }
+    const h=heard();
+    for(const e of q){
+      if(e.st===0&&h>=e.t){e.st=1;onBeat(e.n);}
+      if(e.st===1&&h>=e.t+WIN+.03){e.st=2;check(e.n);}
+    }
+    while(q.length&&q[0].st===2)q.shift();
+  }
+  function onBeat(k){
+    const type=k%2===0?'k':'h';
+    guards.forEach(g=>{if(g.t!==type)return;let nx=g.x+g.d;if(nx<0||nx>=W){g.d=-g.d;nx=g.x+g.d;}g.x=nx;});
+    beatEls.forEach((b,i)=>b.classList.toggle('on',i===k%4));
+    flash(field,'g'+type,150);
+    draw();
+  }
+  function check(k){
+    if(won)return;
+    beats++;
+    const type=k%2===0?'k':'h';
+    if(MAP[p.y][p.x]===type){
+      caught++;p={...START};tone(110,AC.currentTime,.3,.3,'sawtooth');
+      say(type==='k'?'Seen in a red lane on the kick. Back to the start.':'Seen in a yellow lane on the snare. Back to the start.');
+      draw(true);
+    }else statR.innerHTML=`Beats used <b>${beats}</b> · caught <b>${caught}</b>`;
+  }
+  function trip(s){say(s);draw(true);if(AC)nz(AC.currentTime,.05,400,'lowpass',.3);}
+  function move(dx,dy){
+    if(!loop.on){say('Start the loop first. You can only step on a beat.');return;}
+    if(won)return;
+    const h=heard(),m=Math.round((h-t0)/BEAT),off=h-(t0+m*BEAT);
+    if(m<0||Math.abs(off)>WIN){trip(off>0?'Off the beat: too late. No step.':'Off the beat: too early. No step.');return;}
+    if(m===lastMove){trip('One step per beat.');return;}
+    lastMove=m;
+    const nx=p.x+dx,ny=p.y+dy;
+    if(nx<0||ny<0||nx>=W||ny>=H||MAP[ny][nx]==='#'){trip('Blocked. That beat is spent.');return;}
+    if(guards.some(g=>g.x===nx&&g.y===ny)){trip('A guard is standing there. That beat is spent.');return;}
+    p={x:nx,y:ny};tone(midi(72),AC.currentTime,.07,.16);
+    const here=MAP[ny][nx];
+    if(here==='E'){won=true;tone(midi(76),AC.currentTime+.1,.3,.2);tone(midi(84),AC.currentTime+.22,.5,.2);say(`Out. ${beats} beats, caught ${caught} time${caught===1?'':'s'}. Reset to run it again.`);}
+    else if(here==='k')say('In a red lane. Be gone by the next kick.');
+    else if(here==='h')say('In a yellow lane. Be gone by the next snare.');
+    else say('Safe ground.');
+    draw();
+  }
+  function start(){audio();t0=AC.currentTime+.15;n=0;q=[];lastMove=-1;loop.start();playB.textContent='Stop the loop';}
+  function stop(){loop.stop();playB.textContent='Start the loop';beatEls.forEach(b=>b.classList.remove('on'));}
+  playB.onclick=()=>{loop.on?stop():start();playB.blur();};
+  $('[data-act=reset]',root).onclick=e=>{init();say('Back at the start. Kick, snare, kick, snare.');e.currentTarget.blur();};
+  $$('.dpad button',root).forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();const [dx,dy]=b.dataset.d.split(',').map(Number);move(dx,dy);}));
+  init();say('Start the loop, feel the count, then step on the beat.');
+  const KEYS={ArrowUp:[0,-1],KeyW:[0,-1],ArrowDown:[0,1],KeyS:[0,1],ArrowLeft:[-1,0],KeyA:[-1,0],ArrowRight:[1,0],KeyD:[1,0]};
+  return{stop,key(e){const d=KEYS[e.code];if(d){move(d[0],d[1]);return true;}}};
+})();
+
+/* ---------- 5. Three on Four ---------- */
+demos.hands=(()=>{
+  const root=$('#p-hands'),msg=$('.msg',root),playB=$('[data-act=play]',root),guide=$('#guide'),streakR=$('[data-r=streak]',root);
+  const B=2.4,TOL=.11,NUM={L:3,R:4},FRQ={L:196,R:587};
+  const rails={L:$('.rail[data-s=L]',root),R:$('.rail[data-s=R]',root)},pads={L:$('.pad[data-s=L]',root),R:$('.pad[data-s=R]',root)};
+  const marks={L:[],R:[]},heads={};
+  for(const s of ['L','R']){
+    for(let k=0;k<NUM[s];k++){const m=el('i','mk');m.style.left=(k/NUM[s]*100)+'%';rails[s].append(m);marks[s].push(m);}
+    heads[s]=el('i','head');rails[s].append(heads[s]);
+  }
+  let t0=0,sched,hits,extra,judged,streak=0,best=0;
+  const say=s=>msg.textContent=s;
+  const show=()=>streakR.innerHTML=`Clean bars in a row <b>${streak}</b> · best <b>${best}</b>`;
+  const loop=raf(tick);
+  function tick(){
+    const a=AC.currentTime;
+    for(const s of ['L','R']){
+      const d=B/NUM[s];
+      while(t0+sched[s]*d<a+.12){
+        const t=t0+sched[s]*d,bar=Math.floor(sched[s]/NUM[s]);
+        if(t>a-.05){if(guide.checked||bar===0)tone(FRQ[s],t,.09,.13,'sine');if(s==='R'&&sched[s]%4===0)hat(t,.9);}
+        sched[s]++;
+      }
+    }
+    const h=heard(),ph=(h-t0)/B;
+    if(ph<0)return;
+    const bar=Math.floor(ph);
+    for(const s of ['L','R']){
+      heads[s].style.left=((ph-bar)*100)+'%';
+      const d=B/NUM[s];
+      marks[s].forEach((m,k)=>{const idx=bar*NUM[s]+k;m.className='mk'+(hits[s].has(idx)?' hit':(bar>=1&&h>t0+idx*d+TOL?' miss':''));});
+    }
+    while(h>t0+(judged+1)*B+TOL){
+      if(judged>=1){
+        let clean=!extra.has(judged);
+        for(const s of ['L','R'])for(let k=0;k<NUM[s];k++)if(!hits[s].has(judged*NUM[s]+k))clean=false;
+        if(clean){streak++;best=Math.max(best,streak);say(streak>=4?'Locked in. Try it with the guide tones off.':'Clean bar. Keep both hands going.');}
+        else{if(streak>0)say('Dropped one. Find beat 1 again, where both hands meet.');streak=0;}
+        show();
+      }else say('Now you. Left hand 3, right hand 4, both together on beat 1.');
+      judged++;
+    }
+  }
+  function tap(s){
+    audio();
+    tone(FRQ[s],AC.currentTime,.12,.28);
+    if(!loop.on){flash(pads[s],'hit');return;}
+    const h=heard(),d=B/NUM[s],idx=Math.round((h-t0)/d),off=h-(t0+idx*d);
+    if(idx>=0&&Math.abs(off)<=TOL&&!hits[s].has(idx)){hits[s].add(idx);flash(pads[s],'hit');}
+    else{extra.add(Math.floor((h-t0)/B));flash(pads[s],'off');}
+  }
+  function start(){audio();t0=AC.currentTime+.2;sched={L:0,R:0};hits={L:new Set(),R:new Set()};extra=new Set();judged=0;streak=0;show();say('Listen for one bar.');loop.start();playB.textContent='Stop';}
+  function stop(){loop.stop();playB.textContent='Start';}
+  playB.onclick=()=>{loop.on?stop():start();playB.blur();};
+  for(const s of ['L','R'])pads[s].addEventListener('pointerdown',e=>{e.preventDefault();tap(s);});
+  show();say('Press start. The first bar is for listening.');
+  return{stop,key(e){if(e.code==='KeyF'){tap('L');return true;}if(e.code==='KeyJ'){tap('R');return true;}}};
+})();
+
+/* ---------- 6. Bar Fight ---------- */
+demos.cards=(()=>{
+  const root=$('#p-cards'),msg=$('.msg',root),foeRow=$('[data-row=foe]',root),meRow=$('[data-row=me]',root),handEl=$('.hand',root);
+  const playB=$('[data-act=play]',root),clearB=$('[data-act=clear]',root);
+  const TYPES={
+    jab:{name:'Jab',cost:1,text:'3 damage. +2 for each jab on the beat right before it.'},
+    parry:{name:'Parry',cost:1,text:'Cancels a hit that lands on this beat.'},
+    hook:{name:'Hook',cost:2,text:'7 damage on its second beat.'},
+    heavy:{name:'Heavy',cost:4,text:'16 damage on its fourth beat. Any hit you take during the wind-up cancels it.'}};
+  const FOE=[[0,0,5,0,0,0,5,0],[4,0,0,0,4,0,0,4],[0,6,0,6,0,0,0,0],[0,0,0,0,8,0,4,4],[5,0,0,5,0,0,5,0]];
+  const BEAT=.42,HP=24,FHP=60;
+  let hp,foe,turn,deck,discard,hand,placed,sel,busy,over,now=-1,uid=0,ev=[],shown=0,endT=0,outcome=null;
+  const say=s=>msg.textContent=s;
+  const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+  const cost=c=>TYPES[c.type].cost;
+  const at=i=>placed.find(p=>i>=p.start&&i<p.start+cost(p.card));
+  const fits=(c,i)=>{if(i+cost(c)>8)return false;for(let j=i;j<i+cost(c);j++)if(at(j))return false;return true;};
+  const loop=raf(tick);
+  function reset(){
+    loop.stop();
+    hp=HP;foe=FHP;turn=0;discard=[];hand=[];placed=[];sel=null;busy=false;over=false;now=-1;
+    deck=shuffle([...'jjjjjppppkkhh'].map(c=>({id:uid++,type:{j:'jab',p:'parry',k:'hook',h:'heavy'}[c]})));
+    deal();render();say('Pick a card, then pick the beat it starts on. Tap a placed card to take it back.');
+  }
+  function deal(){
+    discard.push(...hand,...placed.map(p=>p.card));hand=[];placed=[];
+    while(hand.length<5){if(!deck.length){deck=shuffle(discard);discard=[];}if(!deck.length)break;hand.push(deck.pop());}
+  }
+  function render(){
+    const pat=FOE[turn%FOE.length];
+    foeRow.innerHTML='';
+    pat.forEach((d,i)=>foeRow.append(el('div','fc'+(d?' hits':'')+(i===now?' now':''),d?String(d):'·')));
+    meRow.innerHTML='';
+    const picked=hand.find(c=>c.id===sel);
+    for(let i=0;i<8;i++){
+      const p=at(i);
+      if(p){
+        if(p.start!==i)continue;
+        const b=el('button','pc c-'+p.card.type+(now>=i&&now<i+cost(p.card)?' now':''),TYPES[p.card.type].name);
+        b.type='button';b.style.gridColumn='span '+cost(p.card);b.title='Take back';
+        b.onclick=()=>{if(busy||over)return;placed=placed.filter(x=>x!==p);hand.push(p.card);render();};
+        meRow.append(b);
+      }else{
+        const b=el('button','slot'+(picked&&fits(picked,i)?' ok':'')+(i===now?' now':''),String(i+1));
+        b.type='button';b.setAttribute('aria-label','Beat '+(i+1));
+        b.onclick=()=>place(i);
+        meRow.append(b);
+      }
+    }
+    handEl.innerHTML='';
+    if(!hand.length)handEl.append(el('p','empty','Every card is on the bar.'));
+    hand.forEach(c=>{
+      const T=TYPES[c.type],b=el('button','card c-'+c.type+(c.id===sel?' sel':''));b.type='button';
+      const nm=el('div','nm',T.name);nm.append(el('span','',T.cost+(T.cost===1?' beat':' beats')));
+      b.append(nm,el('div','tx',T.text));
+      b.onclick=()=>{if(busy||over)return;sel=sel===c.id?null:c.id;render();};
+      handEl.append(b);
+    });
+    $('[data-r=hp]',root).innerHTML=`You <b>${hp}</b> / ${HP}`;
+    $('[data-r=foe]',root).innerHTML=`The Metronome <b>${foe}</b> / ${FHP}`;
+    $('[data-m=hp]',root).style.width=(hp/HP*100)+'%';
+    $('[data-m=foe]',root).style.width=(foe/FHP*100)+'%';
+    $('[data-r=turn]',root).innerHTML=`Bar <b>${turn+1}</b>`;
+    playB.disabled=busy||over;clearB.disabled=busy||over;
+  }
+  function place(i){
+    if(busy||over)return;
+    const c=hand.find(x=>x.id===sel);
+    if(!c){say('Pick a card from your hand first.');return;}
+    if(!fits(c,i)){const n=cost(c);say(`${TYPES[c.type].name} needs ${n} free beat${n===1?'':'s'} starting there.`);return;}
+    hand=hand.filter(x=>x!==c);placed.push({card:c,start:i});sel=null;render();
+  }
+  function play(){
+    if(busy||over)return;
+    audio();busy=true;sel=null;ev=[];shown=0;outcome=null;
+    const pat=FOE[turn%FOE.length],t0=AC.currentTime+.25,dead=new Set();
+    let h=hp,f=foe,fl=0;
+    for(let i=0;i<8&&!outcome;i++){
+      const p=at(i),ty=p?p.card.type:'',t=t0+i*BEAT,log=[],snd=[()=>hat(t,.5)],e=pat[i];
+      if(e){
+        if(ty==='parry'){log.push(`Parried ${e}.`);snd.push(()=>nz(t,.12,3200,'bandpass',.5));}
+        else{h-=e;log.push(`Took ${e}.`);snd.push(()=>kick(t));if(ty==='heavy'&&!dead.has(p)){dead.add(p);log.push('Heavy cancelled.');}}
+      }
+      if(h<=0)outcome='lose';
+      else{
+        if(ty==='jab'){const d=3+2*fl;fl++;f-=d;log.push(`Jab hits for ${d}.`);snd.push(()=>snare(t,.7));}else fl=0;
+        if(ty==='hook'){if(i===p.start+1){f-=7;log.push('Hook lands for 7.');snd.push(()=>{snare(t);tone(110,t,.2,.3,'sawtooth');});}else log.push('Hook winds up.');}
+        if(ty==='heavy'&&!dead.has(p)){
+          if(i===p.start+3){f-=16;log.push('Heavy lands for 16.');snd.push(()=>{kick(t,1.2);nz(t,.35,900,'lowpass',.6);});}
+          else{const st=i-p.start;log.push('Heavy winds up.');snd.push(()=>tone(110*Math.pow(1.26,st),t,.3,.14,'sawtooth'));}
+        }
+        if(f<=0)outcome='win';
+      }
+      ev.push({i,t,h:Math.max(0,h),f:Math.max(0,f),text:`Beat ${i+1}: `+(log.join(' ')||'rest.'),snd,done:false});
+    }
+    endT=ev[ev.length-1].t+BEAT;
+    render();loop.start();
+  }
+  function tick(){
+    const a=AC.currentTime,h=heard();
+    for(const e of ev)if(!e.done&&e.t<a+.12){e.done=true;e.snd.forEach(fn=>fn());}
+    while(shown<ev.length&&ev[shown].t<=h){const e=ev[shown++];now=e.i;hp=e.h;foe=e.f;render();say(e.text);}
+    if(shown>=ev.length&&h>=endT)finish();
+  }
+  function finish(){
+    loop.stop();
+    if(ev.length){const e=ev[ev.length-1];hp=e.h;foe=e.f;}
+    ev=[];now=-1;busy=false;
+    if(outcome==='win'){over=true;render();say(`The Metronome stops ticking. You won on bar ${turn+1}. Start a new fight to play again.`);return;}
+    if(outcome==='lose'){over=true;render();say('Knocked out. Parry the big hits, and keep Heavy away from beats where you get hit.');return;}
+    turn++;deal();render();
+    say(`Bar ${turn+1}. Check where the hits land, then build around them.`);
+  }
+  playB.onclick=()=>{play();playB.blur();};
+  clearB.onclick=()=>{if(busy||over)return;hand.push(...placed.map(p=>p.card));placed=[];render();};
+  $('[data-act=reset]',root).onclick=reset;
+  reset();
+  return{stop(){if(busy)finish();}};
+})();
+
+/* ---------- shell ---------- */
+const IDS=['compose','conduct','silence','stealth','hands','cards'];
+function show(id){
+  if(!IDS.includes(id))id='compose';
+  if(active&&active!==id&&demos[active].stop)demos[active].stop();
+  active=id;
+  $$('.key').forEach(k=>k.setAttribute('aria-selected',String(k.dataset.id===id)));
+  $$('.demo').forEach(d=>{d.hidden=d.id!=='p-'+id;});
+  try{history.replaceState(null,'','#'+id);}catch(e){}
+}
+$$('.key').forEach(k=>k.onclick=()=>show(k.dataset.id));
+addEventListener('keydown',e=>{
+  if(e.repeat||e.metaKey||e.ctrlKey||e.altKey)return;
+  const t=e.target;
+  if(t&&t.tagName==='INPUT')return;
+  const d=demos[active];
+  if(d&&d.key&&d.key(e)){e.preventDefault();if(t&&t.blur&&t.tagName==='BUTTON')t.blur();}
+});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&active&&demos[active].stop)demos[active].stop();});
+show((location.hash||'').slice(1));
+})();
+</script>
+
+</body>
+</html>
